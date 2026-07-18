@@ -117,6 +117,23 @@ tests/
 docs/images/
 ```
 
+## Deployed demo
+
+Live on Google Cloud Run (mock planner):
+
+**https://cookday-1035020186370.us-central1.run.app**
+
+Redeploy:
+
+```bash
+gcloud run deploy cookday \
+  --source . \
+  --region us-central1 \
+  --project gcpdevelopment-464720 \
+  --allow-unauthenticated \
+  --set-env-vars "COOKDAY_MOCK_LLM=1"
+```
+
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).

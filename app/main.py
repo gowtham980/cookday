@@ -124,8 +124,8 @@ def _default_form() -> dict:
 def run() -> None:
     import uvicorn
 
-    host = os.getenv("COOKDAY_HOST", "127.0.0.1")
-    port = int(os.getenv("COOKDAY_PORT", "8080"))
+    host = os.getenv("COOKDAY_HOST", "0.0.0.0")
+    port = int(os.getenv("PORT") or os.getenv("COOKDAY_PORT", "8080"))
     uvicorn.run("app.main:app", host=host, port=port, reload=False)
 
 
