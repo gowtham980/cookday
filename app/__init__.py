@@ -1,0 +1,1 @@
+"""CookDay web application."""

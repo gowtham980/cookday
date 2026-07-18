@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CookDay — cooking to-do for your day</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">CD</div>
+        <div>
+          <h1>CookDay</h1>
+          <p>Personal cooking to-do: meals, grocery, swaps &amp; budget</p>
+        </div>
+      </div>
+    </header>
+
+    {% if error %}
+    <div class="banner err" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <div class="grid two">
+      <section class="card" aria-labelledby="day-heading">
+        <h2 id="day-heading">Your day</h2>
+        <p class="muted">Tell CookDay about today. Agents build breakfast, lunch, dinner, a grocery list, substitutions, and budget feasibility.</p>
+
+        <div class="chip-row" aria-label="Presets">
+          <button type="button" class="chip" data-preset="busy">Busy weeknight</button>
+          <button type="button" class="chip" data-preset="budget">Tight budget</button>
+          <button type="button" class="chip" data-preset="veg">Vegetarian</button>
+        </div>
+
+        <form id="plan-form" method="post" action="/plan">
+          <div class="row">
+            <div>
+              <label for="people">People</label>
+              <input id="people" name="people" type="number" min="1" max="12" value="{{ form.people }}" required />
+            </div>
+            <div>
+              <label for="budget_limit">Budget limit (USD)</label>
+              <input id="budget_limit" name="budget_limit" type="number" min="0" step="0.5" value="{{ form.budget_limit }}" required />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="max_prep_minutes">Max prep minutes</label>
+              <input id="max_prep_minutes" name="max_prep_minutes" type="number" min="5" max="240" value="{{ form.max_prep_minutes }}" required />
+            </div>
+            <div>
+              <label for="energy">Energy</label>
+              <select id="energy" name="energy">
+                {% for e in ["low", "medium", "high"] %}
+                <option value="{{ e }}" {% if form.energy == e %}selected{% endif %}>{{ e }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <label for="diet">Diet</label>
+          <input id="diet" name="diet" value="{{ form.diet }}" placeholder="omnivore, vegetarian, vegan…" />
+
+          <label for="avoid">Avoid (comma-separated)</label>
+          <input id="avoid" name="avoid" value="{{ form.avoid }}" placeholder="dairy, shellfish, nuts" />
+
+          <label for="equipment">Equipment</label>
+          <input id="equipment" name="equipment" value="{{ form.equipment }}" placeholder="stove, oven, microwave" />
+
+          <label for="notes">Notes about your day</label>
+          <textarea id="notes" name="notes" placeholder="Late meeting, kids soccer, only 30 minutes after 7pm…">{{ form.notes }}</textarea>
+
+          <div class="actions">
+            <button type="submit" id="submit-btn">Build my cooking day</button>
+          </div>
+          <p class="muted" id="loading" hidden>Planning with CookDay agents…</p>
+        </form>
+      </section>
+
+      <section class="card" aria-labelledby="result-heading">
+        <h2 id="result-heading">Cooking plan</h2>
+
+        {% if not result %}
+        <div class="empty">
+          <strong>No plan yet</strong>
+          Fill in your day and hit <em>Build my cooking day</em>.
+          You’ll get meals, grocery, substitutions, and budget in one flow.
+        </div>
+        {% else %}
+        <p class="muted">Source: <strong>{{ result.source }}</strong>
+          {% if result.budget.feasible %}
+          · <span style="color: var(--ok)">On budget</span>
+          {% else %}
+          · <span style="color: var(--bad)">Over budget</span>
+          {% endif %}
+        </p>
+
+        {% set active = active_tab if active_tab is defined else "meals" %}
+        <div class="tabs" role="tablist" aria-label="Plan sections">
+          <button type="button" class="tab" role="tab" data-tab="meals" aria-selected="{{ 'true' if active == 'meals' else 'false' }}">Meals</button>
+          <button type="button" class="tab" role="tab" data-tab="grocery" aria-selected="{{ 'true' if active == 'grocery' else 'false' }}">Grocery</button>
+          <button type="button" class="tab" role="tab" data-tab="subs" aria-selected="{{ 'true' if active == 'subs' else 'false' }}">Substitutions</button>
+          <button type="button" class="tab" role="tab" data-tab="budget" aria-selected="{{ 'true' if active == 'budget' else 'false' }}">Budget</button>
+        </div>
+
+        <div class="panel" id="panel-meals" role="tabpanel" {% if active != 'meals' %}hidden{% endif %}>
+          <h3 class="sr-only">Meals</h3>
+          {% for label, meal in [("Breakfast", result.meals.breakfast), ("Lunch", result.meals.lunch), ("Dinner", result.meals.dinner)] %}
+          <article class="meal">
+            <span class="badge">{{ label }}</span>
+            <span class="badge">{{ meal.minutes }} min</span>
+            <h3>{{ meal.name }}</h3>
+            <p class="muted">Ingredients:
+              {% for i in meal.ingredients %}{{ i.name }} ({{ i.qty }} {{ i.unit }}){% if not loop.last %}; {% endif %}{% endfor %}
+            </p>
+            {% if meal.steps %}
+            <ol>
+              {% for s in meal.steps %}<li>{{ s }}</li>{% endfor %}
+            </ol>
+            {% endif %}
+          </article>
+          {% endfor %}
+          {% if result.meals.cooking_todos %}
+          <h3>Cooking to-dos</h3>
+          <ul class="todo-list">
+            {% for t in result.meals.cooking_todos %}<li>{{ t }}</li>{% endfor %}
+          </ul>
+          {% endif %}
+        </div>
+
+        <div class="panel" id="panel-grocery" role="tabpanel" {% if active != 'grocery' %}hidden{% endif %}>
+          <table>
+            <thead>
+              <tr><th>Item</th><th>Qty</th><th>Category</th><th>Est. $</th></tr>
+            </thead>
+            <tbody>
+              {% for i in result.grocery.items %}
+              <tr>
+                <td>{{ i.name }}</td>
+                <td>{{ i.qty }} {{ i.unit }}</td>
+                <td>{{ i.category }}</td>
+                <td>{{ '%.2f'|format(i.est_cost) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% if result.grocery.notes %}
+          <ul>{% for n in result.grocery.notes %}<li class="muted">{{ n }}</li>{% endfor %}</ul>
+          {% endif %}
+        </div>
+
+        <div class="panel" id="panel-subs" role="tabpanel" {% if active != 'subs' %}hidden{% endif %}>
+          {% for s in result.substitutions.items %}
+          <article class="meal">
+            <h3>{{ s.original }}</h3>
+            <p class="muted">{{ s.reason }}</p>
+            <p>Try: {{ s.alternatives | join(", ") }}</p>
+          </article>
+          {% else %}
+          <p class="muted">No substitutions generated.</p>
+          {% endfor %}
+        </div>
+
+        <div class="panel" id="panel-budget" role="tabpanel" {% if active != 'budget' %}hidden{% endif %}>
+          <div class="banner {{ 'ok' if result.budget.feasible else 'bad' }}" role="status">
+            <strong>${{ '%.2f'|format(result.budget.estimated_total) }}</strong>
+            estimated vs
+            <strong>${{ '%.2f'|format(result.budget.limit) }}</strong> limit —
+            {{ "feasible" if result.budget.feasible else "not feasible" }}
+          </div>
+          <ul>
+            {% for n in result.budget.notes %}<li>{{ n }}</li>{% endfor %}
+          </ul>
+          {% if result.budget.suggested_swaps %}
+          <h3>Suggested swaps</h3>
+          <ul>
+            {% for s in result.budget.suggested_swaps %}<li>{{ s }}</li>{% endfor %}
+          </ul>
+          {% endif %}
+        </div>
+        {% endif %}
+      </section>
+    </div>
+
+    <footer>
+      CookDay v0.1 · Google ADK design + Ollama-ready · local-first open source
+    </footer>
+  </div>
+
+  <script>
+    const form = document.getElementById("plan-form");
+    const loading = document.getElementById("loading");
+    const submitBtn = document.getElementById("submit-btn");
+    form?.addEventListener("submit", () => {
+      loading.hidden = false;
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Building…";
+    });
+
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const id = tab.dataset.tab;
+        document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", t === tab ? "true" : "false"));
+        document.querySelectorAll(".panel").forEach((p) => {
+          p.hidden = p.id !== "panel-" + id;
+        });
+      });
+    });
+
+    const presets = {
+      busy: { people: 2, budget_limit: 35, max_prep_minutes: 25, diet: "omnivore", avoid: "", energy: "low", notes: "Home late, low energy, need simple dinners." },
+      budget: { people: 3, budget_limit: 22, max_prep_minutes: 40, diet: "omnivore", avoid: "", energy: "medium", notes: "Stretch groceries until Friday." },
+      veg: { people: 2, budget_limit: 30, max_prep_minutes: 40, diet: "vegetarian", avoid: "meat, fish", energy: "medium", notes: "Vegetarian day, no fish." },
+    };
+    document.querySelectorAll("[data-preset]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const p = presets[btn.dataset.preset];
+        if (!p) return;
+        for (const [k, v] of Object.entries(p)) {
+          const el = form.elements.namedItem(k);
+          if (el) el.value = v;
+        }
+      });
+    });
+  </script>
+</body>
+</html>
